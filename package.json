@@ -6,21 +6,41 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "poll:once": "tsx scripts/poll-gmail-notifications.ts once",
+    "poll:start": "tsx scripts/poll-gmail-notifications.ts continuous"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "^5.2.0",
+    "@neondatabase/serverless": "^1.0.2",
+    "@squircle/core": "^1.0.6",
+    "@squircle/paint-polyfill": "^1.0.6",
+    "@squircle/tailwindcss": "^1.0.6",
+    "better-auth": "^1.3.34",
+    "drizzle-orm": "^0.44.7",
+    "googleapis": "^166.0.0",
+    "imapflow": "^1.1.1",
+    "next": "16.0.2",
+    "nodemailer": "^7.0.10",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "next": "16.0.2"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^7.0.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "drizzle-kit": "^0.31.6",
     "eslint": "^9",
-    "eslint-config-next": "16.0.2"
+    "eslint-config-next": "16.0.2",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
   }
 }

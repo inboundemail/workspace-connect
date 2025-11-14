@@ -1,0 +1,18 @@
+# Organization Policy for Gmail API Push Notifications (Legacy Format)
+#
+# This is the legacy v1 format for organization policies.
+# Use this if the v2 format (gmail-policy.yaml) doesn't work.
+#
+# To apply this policy (requires Organization Policy Administrator role):
+#   gcloud resource-manager org-policies set-policy gmail-policy-legacy.yaml --project=inbound-org
+#
+# Without this policy, you'll get an error:
+# "User gmail-api-push@system.gserviceaccount.com is not in permitted organization"
+#
+# Note: C0339rv4r is the inbound.org organization ID
+
+constraint: constraints/iam.allowedPolicyMemberDomains
+listPolicy:
+  allowedValues:
+    - "C0339rv4r"  # inbound.org organization
+    - "gmail-api-push@system.gserviceaccount.com"  # Gmail API service account

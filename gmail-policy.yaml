@@ -1,0 +1,24 @@
+# Organization Policy for Gmail API Push Notifications
+#
+# This policy allows the Gmail API service account to publish messages
+# to your Pub/Sub topic for push notifications.
+#
+# To apply this policy (requires Organization Policy Administrator role):
+#   gcloud org-policies set-policy gmail-policy.yaml --project=inbound-org
+#
+# Or try the legacy command:
+#   gcloud resource-manager org-policies set-policy gmail-policy-legacy.yaml --project=inbound-org
+#
+# Without this policy, you'll get an error:
+# "User gmail-api-push@system.gserviceaccount.com is not in permitted organization"
+#
+# Note: C0339rv4r is the inbound.org organization ID
+
+name: projects/inbound-org/policies/iam.allowedPolicyMemberDomains
+spec:
+  rules:
+    - allowAll: false
+      values:
+        allowedValues:
+          - "C0339rv4r"  # inbound.org organization
+          - "gmail-api-push@system.gserviceaccount.com"  # Gmail API service account
