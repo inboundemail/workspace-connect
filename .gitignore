@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+packages/workspace-connect/node_modules
+packages/workspace-connect/dist
