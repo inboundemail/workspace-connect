@@ -1,7 +1,7 @@
 {
   "name": "workspace-connect",
-  "version": "0.1.0",
-  "description": "Universal email provider SDK for Gmail, Outlook, and more",
+  "version": "0.0.3",
+  "description": "Gmail integration SDK for Next.js with extensible provider architecture",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -41,10 +41,21 @@
     "outlook",
     "email",
     "workspace",
-    "oauth"
+    "oauth",
+    "nextjs",
+    "pubsub",
+    "webhooks"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inboundemail/workspace-connect"
+  },
+  "homepage": "https://github.com/inboundemail/workspace-connect#readme",
+  "bugs": {
+    "url": "https://github.com/inboundemail/workspace-connect/issues"
+  },
   "peerDependencies": {
     "next": ">=14.0.0"
   },

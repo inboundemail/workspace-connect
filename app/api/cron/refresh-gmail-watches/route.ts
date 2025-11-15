@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { refreshGmailAPIWatches } from "@/lib/services/email-watcher";
 
 /**
- * /api/cron/refresh-gmail-watches endpoint
+ * /api/cron/refresh-gmail-watches endpoint (LEGACY)
  *
- * This endpoint is called by Vercel Cron Jobs to refresh Gmail API watches.
+ * @deprecated Use /api/workspace-connect/cron/watch-refresh instead
+ * 
+ * This endpoint refreshes Gmail API watches that are expiring.
  * Gmail watches expire after 7 days, so this should run daily to keep them active.
  *
- * Configured in vercel.json to run daily at 2 AM UTC.
- *
  * Security: Requires CRON_SECRET in Authorization header to prevent unauthorized access.
- * Set CRON_SECRET in your Vercel project environment variables.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log("Starting Gmail API watch refresh cron job");
+    console.log("Starting Gmail API watch refresh cron job (legacy endpoint)");
 
     await refreshGmailAPIWatches();
 
@@ -44,4 +43,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
