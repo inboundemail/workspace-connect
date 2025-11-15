@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { apiKey } from "better-auth/plugins";
 import { db } from "./db";
 import * as schema from "./db/schema";
 
@@ -11,6 +12,8 @@ export const auth = betterAuth({
       session: schema.session,
       account: schema.account,
       verification: schema.verification,
+      apiKey: schema.apiKey,
+      apikey: schema.apiKey, // Also provide lowercase version for Better Auth compatibility
     },
   }),
   emailAndPassword: {
@@ -38,6 +41,12 @@ export const auth = betterAuth({
       prompt: "consent", // Force consent screen to get refresh token
     },
   },
+  plugins: [
+    apiKey({
+      // API keys for service-to-service authentication
+      // Use this for microservice deployments
+    }),
+  ],
   secret: process.env.BETTER_AUTH_SECRET || "",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 });

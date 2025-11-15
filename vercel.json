@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/refresh-gmail-watches",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+

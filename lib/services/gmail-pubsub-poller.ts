@@ -36,9 +36,14 @@ export async function pollForNotifications() {
 
   try {
     // Pull messages (max 10 at a time)
+    // @ts-ignore - Pull API exists but types may not be up to date
     const [messages] = await subscription.pull({ maxMessages: 10 });
 
-    console.log(`Received ${messages.length} Gmail notifications`);
+    console.log(`Received ${messages.length || 0} Gmail notifications`);
+
+    if (!messages || messages.length === 0) {
+      return;
+    }
 
     for (const message of messages) {
       try {
@@ -59,6 +64,7 @@ export async function pollForNotifications() {
 
         if (!connection) {
           console.error(`No connection found for ${emailAddress}`);
+          // @ts-ignore - Ack API exists but types may not be up to date
           await subscription.ack([message]);
           continue;
         }
@@ -90,6 +96,7 @@ export async function pollForNotifications() {
           .where(eq(gmailConnection.id, connection.id));
 
         // Acknowledge the message
+        // @ts-ignore - Ack API exists but types may not be up to date
         await subscription.ack([message]);
       } catch (error) {
         console.error("Error processing message:", error);

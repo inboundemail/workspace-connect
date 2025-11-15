@@ -51,6 +51,32 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 
+export const apiKey = pgTable("api_key", {
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name"),
+  start: text("start"), // First few characters of the key for display
+  prefix: text("prefix"), // API key prefix
+  key: text("key").notNull(), // Hashed API key
+  enabled: boolean("enabled").notNull().default(true),
+  remaining: integer("remaining"), // Remaining number of requests
+  refillInterval: integer("refillInterval"), // Refill interval in milliseconds
+  refillAmount: integer("refillAmount"), // Amount to refill
+  lastRefillAt: timestamp("lastRefillAt"), // Last refill timestamp
+  rateLimitEnabled: boolean("rateLimitEnabled").notNull().default(true),
+  rateLimitTimeWindow: integer("rateLimitTimeWindow"), // Time window in milliseconds
+  rateLimitMax: integer("rateLimitMax"), // Max requests per window
+  requestCount: integer("requestCount").notNull().default(0), // Current request count
+  lastRequest: timestamp("lastRequest"), // Last request timestamp
+  expiresAt: timestamp("expiresAt"), // Expiration timestamp
+  permissions: text("permissions"), // JSON string of permissions
+  metadata: jsonb("metadata"), // Additional metadata
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
 // Custom tables for Gmail integration
 export const gmailConnection = pgTable("gmail_connection", {
   id: text("id").primaryKey(),
@@ -58,7 +84,7 @@ export const gmailConnection = pgTable("gmail_connection", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   email: text("email").notNull(),
-  connectionType: text("connection_type").notNull(), // 'api' or 'smtp'
+  connectionType: text("connection_type").notNull(), // 'api'
   // Gmail API specific
   gmailAccessToken: text("gmail_access_token"),
   gmailRefreshToken: text("gmail_refresh_token"),
@@ -66,11 +92,6 @@ export const gmailConnection = pgTable("gmail_connection", {
   gmailHistoryId: text("gmail_history_id"), // For tracking changes via Gmail API
   gmailPubsubTopic: text("gmail_pubsub_topic"),
   gmailWatchExpiration: timestamp("gmail_watch_expiration"),
-  // IMAP/SMTP specific
-  imapHost: text("imap_host"),
-  imapPort: integer("imap_port"),
-  smtpHost: text("smtp_host"),
-  smtpPort: integer("smtp_port"),
   // Common
   isActive: boolean("is_active").notNull().default(true),
   lastSyncedAt: timestamp("last_synced_at"),

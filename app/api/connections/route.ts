@@ -17,12 +17,7 @@ import { startWatching, stopWatching } from "@/lib/services/email-watcher";
 const createConnectionSchema = z.object({
   user_id: z.string(),
   email: z.string().email(),
-  connection_type: z.enum(["api", "smtp"]),
-  // For IMAP/SMTP
-  imap_host: z.string().optional(),
-  imap_port: z.number().optional(),
-  smtp_host: z.string().optional(),
-  smtp_port: z.number().optional(),
+  connection_type: z.literal("api"),
   // Start watching immediately?
   start_watching: z.boolean().optional().default(true),
 });
@@ -69,10 +64,6 @@ export async function POST(request: NextRequest) {
         gmailAccessToken: googleAccount.accessToken,
         gmailRefreshToken: googleAccount.refreshToken,
         gmailTokenExpiry: googleAccount.accessTokenExpiresAt,
-        imapHost: data.imap_host || process.env.GMAIL_IMAP_HOST || "imap.gmail.com",
-        imapPort: data.imap_port || parseInt(process.env.GMAIL_IMAP_PORT || "993"),
-        smtpHost: data.smtp_host || process.env.GMAIL_SMTP_HOST || "smtp.gmail.com",
-        smtpPort: data.smtp_port || parseInt(process.env.GMAIL_SMTP_PORT || "587"),
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),

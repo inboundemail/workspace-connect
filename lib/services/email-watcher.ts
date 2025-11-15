@@ -1,25 +1,13 @@
 import { db } from "../db";
-import { gmailConnection, emailLog } from "../db/schema";
+import { gmailConnection } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { createGmailAPIService } from "./gmail-api";
-import { createSMTPIMAPService } from "./smtp-imap";
-import {
-  sendWebhooksForConnection,
-  parseEmailAddress,
-  parseEmailAddresses,
-  type WebhookPayload,
-} from "./webhook";
 
 /**
  * Email Watcher Service
  *
- * This service manages watching for new emails across different connection types:
- * - Gmail API: Sets up push notifications via Pub/Sub
- * - SMTP/IMAP: Maintains IMAP IDLE connections
+ * This service manages watching for new emails using Gmail API push notifications via Pub/Sub.
  */
-
-// Store active IMAP watchers
-const activeWatchers = new Map<string, () => Promise<void>>();
 
 /**
  * Start watching a Gmail connection for new emails
@@ -39,13 +27,12 @@ export async function startWatching(connectionId: string) {
     throw new Error("Gmail connection is not active");
   }
 
-  if (connection.connectionType === "api") {
-    // Setup Gmail API push notifications
-    await startGmailAPIWatch(connection);
-  } else {
-    // Setup IMAP IDLE watch
-    await startIMAPWatch(connection);
+  if (connection.connectionType !== "api") {
+    throw new Error("Connection is not configured for Gmail API");
   }
+
+  // Setup Gmail API push notifications
+  await startGmailAPIWatch(connection);
 }
 
 /**
@@ -62,13 +49,12 @@ export async function stopWatching(connectionId: string) {
     throw new Error("Gmail connection not found");
   }
 
-  if (connection.connectionType === "api") {
-    // Stop Gmail API push notifications
-    await stopGmailAPIWatch(connection);
-  } else {
-    // Stop IMAP watch
-    await stopIMAPWatch(connectionId);
+  if (connection.connectionType !== "api") {
+    throw new Error("Connection is not configured for Gmail API");
   }
+
+  // Stop Gmail API push notifications
+  await stopGmailAPIWatch(connection);
 }
 
 /**
@@ -125,91 +111,6 @@ async function stopGmailAPIWatch(connection: any) {
   } catch (error) {
     console.error(`Failed to stop Gmail API watch for ${connection.email}:`, error);
     throw error;
-  }
-}
-
-/**
- * Start IMAP IDLE watch
- */
-async function startIMAPWatch(connection: any) {
-  try {
-    // Don't start if already watching
-    if (activeWatchers.has(connection.id)) {
-      console.log(`Already watching ${connection.email} via IMAP`);
-      return;
-    }
-
-    const service = await createSMTPIMAPService(connection.id);
-
-    // Setup IMAP IDLE watch
-    const stopWatcher = await service.watchForNewEmails(async (email) => {
-      console.log(`New email received via IMAP: ${email.subject} from ${email.from}`);
-
-      // Get full message details
-      const thread = await service.getThread(email.threadId);
-      const message = thread.messages.find((m) => m.uid === email.uid);
-
-      if (!message) {
-        console.error(`Could not find message ${email.uid} in thread`);
-        return;
-      }
-
-      // Store in email log
-      const logId = crypto.randomUUID();
-      await db.insert(emailLog).values({
-        id: logId,
-        gmailConnectionId: connection.id,
-        messageId: message.messageId,
-        threadId: message.threadId,
-        from: message.from,
-        to: [message.to],
-        subject: message.subject,
-        snippet: message.body.text?.substring(0, 150) || "",
-        direction: "inbound",
-        status: "received",
-        rawPayload: message,
-        createdAt: new Date(),
-      });
-
-      // Create webhook payload
-      const webhookPayload: WebhookPayload = {
-        type: "email.received",
-        id: `evt_${crypto.randomUUID()}`,
-        timestamp: new Date().toISOString(),
-        data: {
-          id: message.messageId,
-          from: parseEmailAddress(message.from),
-          to: parseEmailAddresses(message.to),
-          subject: message.subject,
-          text: message.body.text,
-          html: message.body.html,
-          thread_id: message.threadId,
-        },
-      };
-
-      // Send to all webhooks for this connection
-      await sendWebhooksForConnection(connection.id, webhookPayload);
-    });
-
-    // Store the stop function
-    activeWatchers.set(connection.id, stopWatcher);
-
-    console.log(`Started IMAP watch for ${connection.email}`);
-  } catch (error) {
-    console.error(`Failed to start IMAP watch for ${connection.email}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Stop IMAP watch
- */
-async function stopIMAPWatch(connectionId: string) {
-  const stopWatcher = activeWatchers.get(connectionId);
-  if (stopWatcher) {
-    await stopWatcher();
-    activeWatchers.delete(connectionId);
-    console.log(`Stopped IMAP watch for connection ${connectionId}`);
   }
 }
 

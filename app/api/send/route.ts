@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { gmailConnection, emailLog } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createGmailAPIService } from "@/lib/services/gmail-api";
-import { createSMTPIMAPService } from "@/lib/services/smtp-imap";
 
 /**
  * /api/send endpoint
@@ -12,7 +11,7 @@ import { createSMTPIMAPService } from "@/lib/services/smtp-imap";
  * This endpoint matches the Resend API specification:
  * https://resend.com/docs/api-reference/emails/send-email
  *
- * It supports both Gmail API and SMTP approaches based on the connection type.
+ * Uses Gmail API for sending emails.
  */
 
 // Resend-compatible request schema
@@ -40,7 +39,6 @@ const sendEmailSchema = z.object({
   thread_id: z.string().optional(),
   // Connection configuration
   connection_id: z.string(), // Which Gmail connection to use
-  method: z.enum(["api", "smtp"]).optional(), // Force a specific method
 });
 
 export async function POST(request: NextRequest) {
@@ -69,68 +67,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine which method to use
-    const method = data.method || connection.connectionType;
-
-    let result: any;
-    let messageId: string;
-    let threadId: string | undefined;
-
-    if (method === "api") {
-      // Use Gmail API
-      const service = await createGmailAPIService(data.connection_id);
-
-      // Convert attachments from base64 if provided
-      const attachments = data.attachments?.map((att) => ({
-        filename: att.filename,
-        content: Buffer.from(att.content, "base64"),
-        contentType: att.contentType,
-      }));
-
-      result = await service.sendEmail({
-        from: data.from,
-        to: data.to,
-        subject: data.subject,
-        html: data.html,
-        text: data.text,
-        cc: data.cc,
-        bcc: data.bcc,
-        reply_to: data.reply_to,
-        attachments,
-        in_reply_to: data.in_reply_to,
-        references: data.references,
-        thread_id: data.thread_id,
-      });
-
-      messageId = result.id || "";
-      threadId = result.threadId || undefined;
-    } else {
-      // Use SMTP
-      const service = await createSMTPIMAPService(data.connection_id);
-
-      // Convert attachments from base64 if provided
-      const attachments = data.attachments?.map((att) => ({
-        filename: att.filename,
-        content: Buffer.from(att.content, "base64"),
-        contentType: att.contentType,
-      }));
-
-      result = await service.sendEmail({
-        from: data.from,
-        to: data.to,
-        subject: data.subject,
-        html: data.html,
-        text: data.text,
-        cc: data.cc,
-        bcc: data.bcc,
-        reply_to: data.reply_to,
-        attachments,
-        inReplyTo: data.in_reply_to,
-        references: data.references,
-      });
-
-      messageId = result.id || "";
+    if (connection.connectionType !== "api") {
+      return NextResponse.json(
+        { error: "Connection is not configured for Gmail API" },
+        { status: 400 }
+      );
     }
+
+    // Use Gmail API
+    const service = await createGmailAPIService(data.connection_id);
+
+    // Convert attachments from base64 if provided
+    const attachments = data.attachments?.map((att) => ({
+      filename: att.filename,
+      content: Buffer.from(att.content, "base64"),
+      contentType: att.contentType,
+    }));
+
+    const result = await service.sendEmail({
+      from: data.from,
+      to: data.to,
+      subject: data.subject,
+      html: data.html,
+      text: data.text,
+      cc: data.cc,
+      bcc: data.bcc,
+      reply_to: data.reply_to,
+      attachments,
+      in_reply_to: data.in_reply_to,
+      references: data.references,
+      thread_id: data.thread_id,
+    });
+
+    const messageId = result.id || "";
+    const threadId = result.threadId || undefined;
 
     // Log the email
     await db.insert(emailLog).values({
@@ -157,7 +127,6 @@ export async function POST(request: NextRequest) {
         created_at: new Date().toISOString(),
         // Additional Gmail-specific data
         thread_id: threadId,
-        method,
       },
       { status: 200 }
     );

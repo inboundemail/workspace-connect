@@ -1,408 +1,350 @@
 # Workspace Connect
 
-> A comprehensive Gmail API & SMTP/IMAP wrapper experiment with Resend-compatible API and inbound.new webhook support
+Workspace Connect is a wrapper on Gmail, Outlook (Office 365) and other email providers allowing you to have a simple interface (provider agnostic)
 
-## What is this?
+## Roadmap:
 
-This is an experimental project to compare **Gmail API** and **SMTP/IMAP** implementations for email integration. It provides a unified API that:
-
-- Supports both Gmail API and SMTP/IMAP approaches
-- Mimics the [Resend](https://resend.com) API format for sending emails
-- Implements webhooks matching [inbound.new](https://inbound.new) specification
-- Uses Better Auth for Google OAuth authentication
-- Built with Next.js, TypeScript, Drizzle ORM, and Neon Postgres
-
-## Why?
-
-When building email integrations, you face a choice:
-- **Gmail API**: Google's official REST API with advanced features
-- **SMTP/IMAP**: Standard protocols that work with any provider
-
-This project implements **both approaches** so you can:
-- ✅ Compare performance side-by-side
-- ✅ Test both implementations with real data
-- ✅ Make an informed decision for your use case
-- ✅ Switch between methods with a single parameter
+| Provider | Receiving | Sending |
+|----------|-----------|---------|
+| Gmail    | ✅ Working | ✅ Working |
+| Outlook  | ❌ Not implemented | ❌ Not implemented |
 
 ## Features
 
-### Core Functionality
-- 🔐 **Google OAuth** via Better Auth (with Gmail scopes)
-- 📧 **Send emails** via Gmail API or SMTP
-- 📬 **Receive emails** via Pub/Sub push notifications or IMAP IDLE
-- 🧵 **Thread support** with proper conversation grouping
-- 🪝 **Webhooks** for real-time email notifications
-- 💾 **Database logging** of all email activity
+- **Gmail API integration** with real-time Pub/Sub push notifications (<1s latency)
+- **Simple REST API** for sending and receiving emails
+- **Inbound.new webhook format** for receiving emails
+- **Thread support** with proper conversation grouping
+- **OAuth2 + API Key authentication** via Better Auth
+- **Full audit trail** - all emails logged to database
+- **Microservice ready** - API key authentication for service-to-service calls
 
-### API Endpoints
+## Self-Hosting
 
-```typescript
-POST /api/send              // Send email (Resend-compatible)
-GET  /api/threads           // List email threads
-GET  /api/thread/:id        // Get specific thread
-POST /api/connections       // Create Gmail connection
-GET  /api/connections       // List connections
-POST /api/webhooks          // Create webhook
-GET  /api/webhooks          // List webhooks
-POST /api/webhooks/gmail-pubsub  // Gmail push notification handler
-```
+### Prerequisites
 
-### Both Implementations
+- Node.js 20+
+- Neon Postgres database (or any Postgres)
+- Google Cloud account with billing enabled
+- Domain with HTTPS (for Pub/Sub webhooks)
 
-Every operation supports both methods:
-
-```typescript
-// Use Gmail API
-await fetch('/api/send', {
-  body: JSON.stringify({
-    method: 'api',
-    // ... email data
-  })
-});
-
-// Use SMTP
-await fetch('/api/send', {
-  body: JSON.stringify({
-    method: 'smtp',
-    // ... same email data
-  })
-});
-```
-
-## Quick Start
-
-### 1. Install Dependencies
+### 1. Database Setup
 
 ```bash
+# Clone and install
+git clone <repo>
+cd workspace-connect
 npm install
-```
 
-### 2. Setup Environment
-
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Fill in required values:
-- Database URL (Neon Postgres)
-- Google OAuth credentials
-- Better Auth secret
-
-### 3. Setup Database
-
-```bash
+# Push schema to database
 npm run db:push
+# Note: If upgrading from SMTP/IMAP version, confirm column deletions
 ```
 
-### 4. Run Development Server
+### 2. Google OAuth Setup
+
+**Google Cloud Console → APIs & Services → Credentials**
+
+1. Create OAuth 2.0 Client ID (Web application)
+2. Add authorized redirect URI: `https://yourdomain.com/api/auth/callback/google`
+3. Enable Gmail API
+4. Add scopes in OAuth consent screen:
+   - `https://www.googleapis.com/auth/gmail.readonly`
+   - `https://www.googleapis.com/auth/gmail.send`
+   - `https://www.googleapis.com/auth/gmail.modify`
+   - `https://www.googleapis.com/auth/gmail.labels`
+
+### 3. Google Cloud Pub/Sub Setup
+
+**Required for real-time email notifications.**
 
 ```bash
-npm run dev
+# Enable APIs
+gcloud services enable gmail.googleapis.com pubsub.googleapis.com --project=YOUR_PROJECT_ID
+
+# Create topic
+gcloud pubsub topics create gmail-notifications --project=YOUR_PROJECT_ID
+
+# Create push subscription
+gcloud pubsub subscriptions create gmail-sub \
+  --topic=gmail-notifications \
+  --push-endpoint=https://yourdomain.com/api/webhooks/gmail-pubsub \
+  --ack-deadline=60 \
+  --project=YOUR_PROJECT_ID
+
+# Grant Gmail publisher access
+gcloud pubsub topics add-iam-policy-binding gmail-notifications \
+  --member=serviceAccount:gmail-api-push@system.gserviceaccount.com \
+  --role=roles/pubsub.publisher \
+  --project=YOUR_PROJECT_ID
 ```
 
-Visit `http://localhost:3000`
+**Org policy issues?** See [references/PUBSUB_SETUP.md](./references/PUBSUB_SETUP.md) for handling `iam.allowedPolicyMemberDomains` restrictions.
 
-## Documentation
+### 4. Environment Variables
 
-- 📖 **[IMPLEMENTATION.md](./IMPLEMENTATION.md)** - Comprehensive implementation guide
-- 📊 **[COMPARISON.md](./COMPARISON.md)** - Detailed Gmail API vs SMTP/IMAP comparison
-- 💡 **[EXAMPLES.md](./EXAMPLES.md)** - Code examples and usage patterns
+Create `.env`:
+
+```bash
+# Database
+DATABASE_URL="postgresql://..."
+
+# Better Auth
+BETTER_AUTH_SECRET="generate-random-32-char-string"
+BETTER_AUTH_URL="https://yourdomain.com"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="xxx.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="GOCSPX-xxx"
+
+# Google Cloud
+GOOGLE_CLOUD_PROJECT_ID="your-project-id"
+GOOGLE_PUBSUB_TOPIC="gmail-notifications"
+```
+
+### 5. Run
+
+```bash
+# Development
+npm run dev
+
+# Production
+npm run build
+npm start
+```
+
+### Gmail Watch Management
+
+Gmail API watches expire after 7 days. Renew them via:
+
+```bash
+# Run daily cron job
+npm run refresh-watches
+```
+
+Or manually via API:
+```typescript
+POST /api/connections
+{
+  "user_id": "...", // better-auth user id
+  "email": "user@gmail.com", // email you want to enable for watch
+  "connection_type": "api",
+  "start_watching": true  // Sets up watch
+}
+```
+
+## API Authentication
+
+### OAuth2 (User Authentication)
+
+Users authenticate via Google OAuth:
+```bash
+GET /api/auth/signin/google
+```
+
+### API Keys (Service-to-Service)
+
+For microservice deployments, use API keys for machine-to-machine authentication.
+
+#### Create API Key
+```bash
+POST /api/api-keys
+Authorization: Bearer <session-token>
+Content-Type: application/json
+
+{
+  "name": "Production Service",
+  "expiresIn": 31536000  // Optional: seconds (1 year)
+}
+
+# Response
+{
+  "id": "key_xxx",
+  "name": "Production Service",
+  "key": "ws_xxxxxxxxxxxx",  // Only returned on creation
+  "expiresAt": "2025-01-01T00:00:00Z",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+#### List API Keys
+```bash
+GET /api/api-keys
+Authorization: Bearer <session-token>
+```
+
+#### Delete API Key
+```bash
+DELETE /api/api-keys?id=key_xxx
+Authorization: Bearer <session-token>
+```
+
+#### Using API Keys
+
+Include API key in requests:
+```bash
+# All API endpoints support API key authentication
+POST /api/send
+Authorization: Bearer ws_xxxxxxxxxxxx
+Content-Type: application/json
+
+{
+  "connection_id": "conn_xxx",
+  "from": "sender@gmail.com",
+  "to": ["recipient@example.com"],
+  "subject": "Hello",
+  "html": "<p>World</p>"
+}
+```
+
+API keys authenticate the user, giving access to their connections and data.
+
+## API Reference
+
+### Send Email
+> This endpoint is compatible with the Resend API.
+
+```bash
+POST /api/send
+Content-Type: application/json
+
+{
+  "connection_id": "conn_xxx",
+  "from": "sender@gmail.com",
+  "to": ["recipient@example.com"],
+  "subject": "Subject",
+  "html": "<p>Body</p>",
+  "thread_id": "optional-thread-id"
+}
+```
+
+### List Threads
+```bash
+GET /api/threads?connection_id=conn_xxx&limit=50&page_token=xxx
+```
+
+### Get Thread
+```bash
+GET /api/thread/:id?connection_id=conn_xxx
+```
+
+### Create Connection
+```bash
+POST /api/connections
+{
+  "user_id": "user_xxx",
+  "email": "user@gmail.com",
+  "connection_type": "api",
+  "start_watching": true
+}
+```
+
+### Setup Webhook
+```bash
+POST /api/webhooks
+{
+  "connection_id": "conn_xxx",
+  "url": "https://your-app.com/webhook",
+  "events": ["email.received"]
+}
+```
+
+Webhook receives inbound.new format:
+```json
+{
+  "type": "email.received",
+  "id": "evt_xxx",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "data": {
+    "id": "msg_xxx",
+    "from": { "email": "sender@example.com", "name": "Sender" },
+    "to": [{ "email": "you@gmail.com" }],
+    "subject": "Subject",
+    "text": "Body",
+    "html": "<p>Body</p>",
+    "thread_id": "thread_xxx"
+  }
+}
+```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Your Application                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-   /api/send            /api/threads          /api/webhooks
-        │                     │                     │
-        │                     │                     │
-   ┌────┴────┐           ┌────┴────┐          ┌────┴────┐
-   │         │           │         │          │         │
-   ▼         ▼           ▼         ▼          ▼         ▼
-Gmail API  SMTP     Gmail API   IMAP     Pub/Sub    IMAP IDLE
-  (send)   (send)    (read)    (read)   (notify)    (notify)
+User Gmail → Gmail API Watch → Pub/Sub Topic → Push Subscription
+→ /api/webhooks/gmail-pubsub → History API → Parse Email
+→ Store in DB → Trigger User Webhooks
 ```
 
-## Tech Stack
+## Database Schema
 
-- **Framework**: Next.js 16 (App Router)
-- **Auth**: Better Auth with Google OAuth
-- **Database**: Drizzle ORM + Neon Postgres
-- **Email (API)**: Google APIs (googleapis)
-- **Email (SMTP)**: Nodemailer
-- **Email (IMAP)**: ImapFlow
-- **Language**: TypeScript
-- **Validation**: Zod
+### Core Tables
 
-## Project Structure
+| Table | Description | Key Fields |
+|-------|-------------|------------|
+| `user` | Better Auth user accounts | id, email, name |
+| `session` | Active user sessions | id, userId, token, expiresAt |
+| `account` | OAuth provider accounts | id, userId, providerId, accessToken, refreshToken |
+| `verification` | Email/phone verifications | id, identifier, value, expiresAt |
+| `api_key` | Service-to-service API keys | id, userId, name, key, expiresAt |
 
-```
-workspace-connect/
-├── app/
-│   ├── api/
-│   │   ├── auth/[...all]/     # Better Auth endpoints
-│   │   ├── send/              # Send email endpoint
-│   │   ├── threads/           # List threads endpoint
-│   │   ├── thread/[id]/       # Get thread endpoint
-│   │   ├── connections/       # Connection management
-│   │   └── webhooks/          # Webhook management
-│   │       └── gmail-pubsub/  # Gmail push notifications
-│   ├── layout.tsx
-│   └── page.tsx
-├── lib/
-│   ├── db/
-│   │   ├── schema.ts          # Database schema
-│   │   └── index.ts           # Database client
-│   ├── services/
-│   │   ├── gmail-api.ts       # Gmail API service
-│   │   ├── smtp-imap.ts       # SMTP/IMAP service
-│   │   ├── webhook.ts         # Webhook service
-│   │   └── email-watcher.ts   # Email watching service
-│   ├── auth.ts                # Better Auth config
-│   ├── auth-client.ts         # Auth client
-│   ├── types.ts               # TypeScript types
-│   └── utils.ts               # Utility functions
-├── IMPLEMENTATION.md          # Implementation guide
-├── COMPARISON.md              # Gmail API vs SMTP comparison
-├── EXAMPLES.md                # Usage examples
-└── README.md                  # This file
+### Email Tables
+
+| Table | Description | Key Fields |
+|-------|-------------|------------|
+| `gmail_connection` | Gmail API connections | id, userId, email, gmailAccessToken, gmailRefreshToken, gmailHistoryId, gmailWatchExpiration |
+| `webhook` | User webhook configurations | id, userId, gmailConnectionId, url, secret, events |
+| `email_log` | All sent/received email logs | id, gmailConnectionId, messageId, threadId, from, to, direction, status |
+| `parsed_emails` | Parsed email content | id, messageId, threadId, html, text, attachments |
+
+## Troubleshooting
+
+**No notifications received?**
+```sql
+-- Check watch expiration
+SELECT email, gmail_watch_expiration
+FROM gmail_connection
+WHERE connection_type = 'api';
+
+-- If expired, recreate connection with start_watching: true
 ```
 
-## Key Decisions
+**Pub/Sub delivery issues?**
+```bash
+# Check subscription status
+gcloud pubsub subscriptions describe gmail-sub --project=YOUR_PROJECT_ID
 
-### Why Both Implementations?
-
-Different use cases require different approaches:
-
-| Use Case | Recommendation |
-|----------|----------------|
-| Gmail-only integration | Gmail API |
-| Multi-provider support | SMTP/IMAP |
-| Production scale | Gmail API |
-| Quick prototype | SMTP/IMAP |
-| Advanced features | Gmail API |
-| Simple send/receive | SMTP/IMAP |
-
-### Why Resend API Format?
-
-[Resend](https://resend.com) has a clean, modern API design:
-- Simple request/response format
-- Good developer experience
-- Well-documented
-- Industry standard
-
-### Why inbound.new Webhooks?
-
-[inbound.new](https://inbound.new) provides a standard webhook format:
-- Clean event structure
-- Proper typing
-- Signature verification
-- Common in the email tools ecosystem
-
-## Comparison Summary
-
-| Feature | Gmail API | SMTP/IMAP |
-|---------|-----------|-----------|
-| Setup | Complex | Simple |
-| Performance | Faster | Slower |
-| Features | Rich | Basic |
-| Multi-provider | No | Yes |
-| Scale | Better | Limited |
-
-See [COMPARISON.md](./COMPARISON.md) for detailed analysis.
-
-## Usage Examples
-
-### Send an Email
-
-```typescript
-const response = await fetch('/api/send', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    connection_id: 'conn_123',
-    method: 'api', // or 'smtp'
-    from: 'sender@gmail.com',
-    to: 'recipient@example.com',
-    subject: 'Hello World',
-    html: '<p>Hello from Workspace Connect!</p>',
-  })
-});
-
-const result = await response.json();
-console.log('Email sent:', result.id);
+# View recent messages (should be empty with push)
+gcloud pubsub subscriptions pull gmail-sub --limit=5 --project=YOUR_PROJECT_ID
 ```
 
-### Setup Webhook
-
-```typescript
-const webhook = await fetch('/api/webhooks', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    connection_id: 'conn_123',
-    url: 'https://your-app.com/webhook',
-    events: ['email.received'],
-  })
-});
-
-// When email arrives, your webhook receives:
-// {
-//   "type": "email.received",
-//   "id": "evt_...",
-//   "timestamp": "2024-01-01T00:00:00Z",
-//   "data": {
-//     "id": "msg_...",
-//     "from": { "email": "sender@example.com" },
-//     "to": [{ "email": "you@gmail.com" }],
-//     "subject": "New Email",
-//     "text": "Email body...",
-//     ...
-//   }
-// }
-```
-
-See [EXAMPLES.md](./EXAMPLES.md) for more examples.
-
-## API Reference
-
-### Send Email (POST /api/send)
-
-Resend-compatible email sending.
-
-**Request:**
-```json
-{
-  "connection_id": "conn_123",
-  "method": "api",
-  "from": "sender@gmail.com",
-  "to": ["recipient@example.com"],
-  "subject": "Subject",
-  "html": "<p>HTML content</p>",
-  "text": "Plain text",
-  "cc": ["cc@example.com"],
-  "bcc": ["bcc@example.com"],
-  "reply_to": ["reply@example.com"],
-  "attachments": [{
-    "filename": "file.pdf",
-    "content": "base64-content",
-    "contentType": "application/pdf"
-  }],
-  "thread_id": "thread_abc",
-  "in_reply_to": "<message-id>",
-  "references": ["<message-id>"]
-}
-```
-
-**Response:**
-```json
-{
-  "id": "msg_123",
-  "from": "sender@gmail.com",
-  "to": ["recipient@example.com"],
-  "created_at": "2024-01-01T00:00:00Z",
-  "thread_id": "thread_abc",
-  "method": "api"
-}
-```
-
-### List Threads (GET /api/threads)
-
-**Query Parameters:**
-- `connection_id` (required)
-- `method` (optional: 'api' or 'smtp')
-- `limit` (default: 50)
-- `page_token` (for pagination)
-- `q` (search query, Gmail API only)
-- `label` (default: 'INBOX')
-
-### Get Thread (GET /api/thread/:id)
-
-**Query Parameters:**
-- `connection_id` (required)
-- `method` (optional: 'api' or 'smtp')
+**Organization policy errors?**
+- Requires `Organization Policy Administrator` role
+- Update policy at organization level, not project level
+- See section 3 for commands
 
 ## Performance
 
-Based on typical usage:
-
-| Operation | Gmail API | SMTP/IMAP |
-|-----------|-----------|-----------|
-| Send email | ~250ms | ~450ms |
-| Fetch thread | ~200ms | ~800ms |
-| List 50 threads | ~300ms | ~2000ms |
-| Real-time notification | <1s | <5s |
-
-Gmail API is generally **44-85% faster** for most operations.
+- Send email: ~250ms
+- Fetch thread: ~200ms
+- List 50 threads: ~300ms
+- Real-time notification: <1s
 
 ## Limitations
 
-### Gmail API
-- Requires Google Cloud setup (Pub/Sub)
-- Watch expiration (must renew every 7 days)
-- Subject to Google's API quotas
-- Gmail/Google Workspace only
-- May require security review for production
-
-### SMTP/IMAP
-- Slower performance
-- Need to maintain connections (IDLE)
-- No Gmail-specific features
-- Manual threading implementation
-- Potential DKIM/SPF issues with aliases
-
-## Future Enhancements
-
-- [ ] Attachment handling improvements
-- [ ] Batch sending support
-- [ ] Email templates
-- [ ] Scheduled sending
-- [ ] Email tracking (opens, clicks)
-- [ ] Admin dashboard
-- [ ] More comprehensive error handling
-- [ ] Rate limiting built-in
-- [ ] Metrics and monitoring
-
-## Contributing
-
-This is an experimental project for research purposes. Feel free to:
-- Test both implementations
-- Report issues or findings
-- Suggest improvements
-- Use as reference for your own projects
-
-## License
-
-MIT License - Feel free to use this code in your projects.
+- Gmail watches expire every 7 days (auto-renewal recommended)
+- Subject to Google API quotas (1B units/day, 250 units/sec/user)
+- Gmail/Google Workspace only (Outlook coming soon)
+- Requires public HTTPS endpoint for Pub/Sub
 
 ## Resources
 
-- [Gmail API Documentation](https://developers.google.com/gmail/api)
-- [Resend API Reference](https://resend.com/docs/api-reference)
-- [Inbound.new Webhooks](https://docs.inbound.new/webhook)
-- [Better Auth](https://better-auth.com)
-- [Drizzle ORM](https://orm.drizzle.team)
-- [Nodemailer](https://nodemailer.com)
-- [ImapFlow](https://imapflow.com)
+- [Gmail API Docs](https://developers.google.com/gmail/api)
+- [Pub/Sub Setup](./references/PUBSUB_SETUP.md) - Push notifications setup
+- [Push Notifications](./references/GMAIL_PUSH_ACTIVE.md) - Detailed push configuration
+- [Pull Polling](./references/PUBSUB_POLLING.md) - Alternative polling approach
+- [Implementation Guide](./references/IMPLEMENTATION.md)
+- [Code Examples](./references/EXAMPLES.md)
 
-## Conclusion
+## License
 
-This project demonstrates that **both Gmail API and SMTP/IMAP are viable** for email integration, with different trade-offs:
-
-- **Gmail API**: Superior performance and features, but more complex
-- **SMTP/IMAP**: Simple and universal, but more limited
-
-The choice depends on your specific requirements. This implementation lets you **test both and decide** what works best for your use case.
-
-For most production Gmail integrations, **Gmail API is recommended**. For quick prototypes or multi-provider support, **SMTP/IMAP is more practical**.
-
----
-
-**Note**: This is an experimental project for research and infrastructure planning. It demonstrates the buildout required for both approaches without a UI or comprehensive testing.
+MIT
