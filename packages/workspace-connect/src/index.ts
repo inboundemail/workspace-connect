@@ -1,27 +1,31 @@
 /**
  * Workspace Connect SDK
  * 
- * Universal email provider SDK for Gmail, Outlook, and more
+ * Stateless Gmail watch service for any Node.js app
  */
 
 // Core exports
-export * from "./core/router";
-export * from "./core/utils";
+export { GmailWatchService } from "./core/gmail-watch-service";
+export type {
+  GmailWatchServiceOptions,
+  StartWatchParams,
+  StopWatchParams,
+  RefreshWatchParams,
+} from "./core/gmail-watch-service";
 
 // Type exports
-export * from "./types";
-
-// Provider exports (selective to avoid conflicts)
-export { gmailProvider, GmailService } from "./providers/gmail";
 export type {
-  GmailServiceOptions,
-  WatchManagementCallback,
-  WatchRefreshCallback,
-  GmailPubSubCallback,
-} from "./providers/gmail";
+  GoogleTokens,
+  WatchInfo,
+  EmailNotification,
+  GoogleConfig,
+  WorkspaceConnectHandlerOptions,
+  EmailAddress,
+} from "./types";
 
-// Re-export main entry points for convenience
+// Utility exports
+export { parseEmailAddress, parseEmailAddresses } from "./core/utils";
+
+// Next.js adapter (optional)
 export { workspaceConnectHandler } from "./next";
-export { createConnector, WorkspaceConnector } from "./server";
-export type { ConnectorOptions, ConnectorResponse } from "./server";
 

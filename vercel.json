@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/refresh-gmail-watches",
+      "path": "/api/workspace-connect/cron/watch-refresh",
       "schedule": "0 2 * * *"
     }
   ]

@@ -2,40 +2,48 @@
  * Type definitions for Workspace Connect SDK
  */
 
-export interface WorkspaceConnectIdentity {
-  customerId: string | undefined;
-  customerData?: Record<string, unknown>;
+// Gmail Watch Types
+export interface GoogleTokens {
+  accessToken: string;
+  refreshToken: string;
 }
 
-export interface WorkspaceConnectRequest extends Request {
-  headers: Headers;
+export interface WatchInfo {
+  email: string;
+  watchId?: string;
+  expiration: Date;
+  historyId: string;
 }
 
-export interface WorkspaceConnectContext {
-  identity: WorkspaceConnectIdentity;
-  params: Record<string, string | string[]>;
+export interface EmailNotification {
+  emailAddress: string;
+  historyId: string;
 }
 
-export type RouteHandler = (
-  request: WorkspaceConnectRequest,
-  context: WorkspaceConnectContext
-) => Promise<Response>;
-
-export interface RouteDescriptor {
-  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
-  path: string;
-  handler: RouteHandler;
+// Configuration
+export interface GoogleConfig {
+  clientId: string;
+  clientSecret: string;
+  pubSubProjectId: string;
+  pubSubTopicName?: string; // defaults to 'gmail-notifications'
 }
 
-export interface WorkspaceProvider {
-  name: string;
-  routes: RouteDescriptor[];
-}
-
+// Handler Options
 export interface WorkspaceConnectHandlerOptions {
-  identify: (request: WorkspaceConnectRequest) => Promise<WorkspaceConnectIdentity>;
-  providers: WorkspaceProvider[];
-  cronSecret?: string;
+  google: GoogleConfig;
+  cronSecret: string;
+  
+  // Token lookup - user provides
+  getTokens: (email: string) => Promise<GoogleTokens>;
+  
+  // Event callbacks
+  onWatchStarted: (watch: WatchInfo) => Promise<void>;
+  onWatchStopped: (params: { email: string }) => Promise<void>;
+  onEmailReceived: (notification: EmailNotification) => Promise<void>;
+  
+  // Cron refresh
+  getExpiringWatches: () => Promise<Array<{ email: string }>>;
+  onWatchRefreshed: (params: { email: string; newExpiration: Date }) => Promise<void>;
 }
 
 // Email types
